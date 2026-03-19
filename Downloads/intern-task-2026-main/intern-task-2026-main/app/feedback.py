@@ -10,13 +10,18 @@ load_dotenv()
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 async def get_feedback(request: FeedbackRequest) -> FeedbackResponse:
-    # Notice the square brackets [ ] around the two { } dictionaries below!
     response = await client.beta.chat.completions.parse(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system", 
-                "content": f"You are a helpful language tutor. Analyze the {request.target_language} sentence provided by the user. If it is incorrect, you MUST write the 'explanation' strictly in {request.native_language}. Do not explain in {request.target_language}."
+                "content": (
+                    f"You are a helpful language tutor. Analyze the {request.target_language} sentence provided by the user. "
+                    f"If it is incorrect, you MUST write the 'explanation' strictly in {request.native_language}. Do not explain in {request.target_language}.\n\n"
+                    "IMPORTANT SCHEMA RULES:\n"
+                    "- 'error_type' MUST be exactly one of: grammar, spelling, word_choice, punctuation, word_order, missing_word, extra_word, conjugation, gender_agreement, number_agreement, tone_register, other.\n"
+                    "- 'difficulty' MUST be exactly one of: A1, A2, B1, B2, C1, C2."
+                )
             },
             {
                 "role": "user", 

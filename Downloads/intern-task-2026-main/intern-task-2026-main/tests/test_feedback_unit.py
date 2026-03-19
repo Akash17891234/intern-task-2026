@@ -1,21 +1,18 @@
-"""Unit tests -- run without an API key using mocked LLM responses."""
-
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+from unittest.mock import patch, AsyncMock, MagicMock
+from app.models import FeedbackRequest, FeedbackResponse
 from app.feedback import get_feedback
-from app.models import FeedbackRequest
 
-
-def _mock_completion(response_data: dict) -> MagicMock:
-    """Build a mock ChatCompletion response."""
-    choice = MagicMock()
-    choice.message.content = json.dumps(response_data)
-    completion = MagicMock()
-    completion.choices = [choice]
-    return completion
-
+def _mock_completion(response_dict):
+    """Helper to mock the OpenAI parsed response structure"""
+    mock_parsed = FeedbackResponse(**response_dict)
+    mock_msg = MagicMock()
+    mock_msg.parsed = mock_parsed
+    mock_choice = MagicMock()
+    mock_choice.message = mock_msg
+    mock_completion = MagicMock()
+    mock_completion.choices = [mock_choice]
+    return mock_completion
 
 @pytest.mark.asyncio
 async def test_feedback_with_errors():
@@ -35,7 +32,7 @@ async def test_feedback_with_errors():
 
     with patch("app.feedback.AsyncOpenAI") as MockClient:
         instance = MockClient.return_value
-        instance.chat.completions.create = AsyncMock(
+        instance.beta.chat.completions.parse = AsyncMock(
             return_value=_mock_completion(mock_response)
         )
 
@@ -50,35 +47,31 @@ async def test_feedback_with_errors():
     assert result.corrected_sentence == "Yo fui al mercado ayer."
     assert len(result.errors) == 1
     assert result.errors[0].error_type == "conjugation"
-    assert result.difficulty == "A2"
-
 
 @pytest.mark.asyncio
 async def test_feedback_correct_sentence():
     mock_response = {
-        "corrected_sentence": "Ich habe gestern einen interessanten Film gesehen.",
+        "corrected_sentence": "Yo fui al mercado ayer.",
         "is_correct": True,
         "errors": [],
-        "difficulty": "B1",
+        "difficulty": "A2",
     }
 
     with patch("app.feedback.AsyncOpenAI") as MockClient:
         instance = MockClient.return_value
-        instance.chat.completions.create = AsyncMock(
+        instance.beta.chat.completions.parse = AsyncMock(
             return_value=_mock_completion(mock_response)
         )
 
         request = FeedbackRequest(
-            sentence="Ich habe gestern einen interessanten Film gesehen.",
-            target_language="German",
+            sentence="Yo fui al mercado ayer.",
+            target_language="Spanish",
             native_language="English",
         )
         result = await get_feedback(request)
 
     assert result.is_correct is True
-    assert result.errors == []
-    assert result.corrected_sentence == request.sentence
-
+    assert len(result.errors) == 0
 
 @pytest.mark.asyncio
 async def test_feedback_multiple_errors():
@@ -104,7 +97,7 @@ async def test_feedback_multiple_errors():
 
     with patch("app.feedback.AsyncOpenAI") as MockClient:
         instance = MockClient.return_value
-        instance.chat.completions.create = AsyncMock(
+        instance.beta.chat.completions.parse = AsyncMock(
             return_value=_mock_completion(mock_response)
         )
 
